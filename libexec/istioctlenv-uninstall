@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+
+set -uo pipefail;
+
+####################################
+# Ensure we can execute standalone #
+####################################
+
+function early_death() {
+  echo "[FATAL] ${0}: ${1}" >&2;
+  exit 1;
+};
+
+if [ -z "${ISTIOCTLENV_ROOT:-""}" ]; then
+  # http://stackoverflow.com/questions/1055671/how-can-i-get-the-behavior-of-gnus-readlink-f-on-a-mac
+  readlink_f() {
+    local target_file="${1}";
+    local file_name;
+
+    while [ "${target_file}" != "" ]; do
+      cd "$(dirname ${target_file})" || early_death "Failed to 'cd \$(dirname ${target_file})' while trying to determine ISTIOCTLENV_ROOT";
+      file_name="$(basename "${target_file}")" || early_death "Failed to 'basename \"${target_file}\"' while trying to determine ISTIOCTLENV_ROOT";
+      target_file="$(readlink "${file_name}")";
+    done;
+
+    echo "$(pwd -P)/${file_name}";
+  };
+
+  ISTIOCTLENV_ROOT="$(cd "$(dirname "$(readlink_f "${0}")")/.." && pwd)";
+  [ -n "${ISTIOCTLENV_ROOT}" ] || early_death "Failed to 'cd \"\$(dirname \"\$(readlink_f \"${0}\")\")/..\" && pwd' while trying to determine ISTIOCTLENV_ROOT";
+else
+  ISTIOCTLENV_ROOT="${ISTIOCTLENV_ROOT%/}";
+fi;
+export ISTIOCTLENV_ROOT;
+
+if [ -n "${ISTIOCTLENV_HELPERS:-""}" ]; then
+  log 'debug' 'ISTIOCTLENV_HELPERS is set, not sourcing helpers again';
+else
+  [ "${ISTIOCTLENV_DEBUG:-0}" -gt 0 ] && echo "[DEBUG] Sourcing helpers from ${ISTIOCTLENV_ROOT}/lib/helpers.sh";
+  if source "${ISTIOCTLENV_ROOT}/lib/helpers.sh"; then
+    log 'debug' 'Helpers sourced successfully';
+  else
+    early_death "Failed to source helpers from ${ISTIOCTLENV_ROOT}/lib/helpers.sh";
+  fi;
+fi;
+
+# Ensure libexec and bin are in $PATH
+for dir in libexec bin; do
+  case ":${PATH}:" in
+    *:${ISTIOCTLENV_ROOT}/${dir}:*) log 'debug' "\$PATH already contains '${ISTIOCTLENV_ROOT}/${dir}', not adding it again";;
+    *) 
+      log 'debug' "\$PATH does not contain '${ISTIOCTLENV_ROOT}/${dir}', prepending and exporting it now";
+      export PATH="${ISTIOCTLENV_ROOT}/${dir}:${PATH}";
+      ;;
+  esac;
+done;
+
+#####################
+# Begin Script Body #
+#####################
+
+[ "${#}" -gt 1 ] && log 'error' 'usage: istioctlenv uninstall [<version>]';
+
+declare version_requested version regex;
+declare arg="${1:-""}";
+
+if [ -z "${arg:-""}" ]; then
+  version_file="$(istioctlenv-version-file)";
+  log 'debug' "Version File: ${version_file}";
+  if [ "${version_file}" != "${ISTIOCTLENV_ROOT}/version" ]; then
+    log 'debug' "Version File (${version_file}) is not the default \${ISTIOCTLENV_ROOT}/version (${ISTIOCTLENV_ROOT}/version)";
+    version_requested="$(cat "${version_file}")" \
+      || log 'error' "Failed to open ${version_file}";
+  elif [ -f "${version_file}" ]; then
+    log 'debug' "Version File is the default \${ISTIOCTLENV_ROOT}/version (${ISTIOCTLENV_ROOT}/version)";
+    version_requested="$(cat "${version_file}")" \
+      || log 'error' "Failed to open ${version_file}";
+  else
+    log 'debug' "Version File is the default \${ISTIOCTLENV_ROOT}/version (${ISTIOCTLENV_ROOT}/version) but it doesn't exist";
+    log 'info' 'No version requested on the command line or in the version file search path. Installing "latest"';
+    version_requested='latest';
+  fi;
+else
+  version_requested="${arg}";
+fi;
+
+log 'debug' "Version Requested: ${version_requested}";
+
+if [[ "${version_requested}" =~ ^min-required$ ]]; then
+  log 'error' 'min-required is an unsupported option for uninstall';
+fi;
+
+if [[ "${version_requested}" =~ ^latest\:.*$ ]]; then
+  version="${version_requested%%\:*}";
+  regex="${version_requested##*\:}";
+elif [[ "${version_requested}" =~ ^latest$ ]]; then
+  version="${version_requested}";
+  regex="";
+else
+  version="${version_requested}";
+  regex="^${version_requested}$";
+fi;
+
+[ -z "${version:-""}" ] && log 'error' "Version not specified on the command line or on version file search path.";
+
+log 'debug' "Processing uninstall for version ${version}, using regex ${regex}";
+
+version="$(istioctlenv-list | sed -E 's/^(\*| )? //g; s/ \(set by .+\)$//' | grep -e "${regex}" | head -n 1)";
+[ -n "${version}" ] || log 'error' "No versions matching '${regex}' found in local";
+
+dst_path="${ISTIOCTLENV_ROOT}/versions/${version}";
+if [ -f "${dst_path}/bin/istioctl" ]; then 
+  log 'info' "Uninstall istioctl v${version}";
+  rm -r "${dst_path}";
+  
+  # If no versions remain, remove the versions directory
+  rmdir "${ISTIOCTLENV_ROOT}/versions" 2>/dev/null;
+  
+  log 'info' "istioctl v${version} is successfully uninstalled";
+fi;

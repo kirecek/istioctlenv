@@ -1,0 +1,7 @@
+versions/
+version
+.istioctl-version
+bin/istioctl-*
+/use-gnupg
+/use-gpgv
+.*.swp

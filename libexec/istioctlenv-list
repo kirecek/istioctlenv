@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+
+set -uo pipefail;
+
+####################################
+# Ensure we can execute standalone #
+####################################
+
+function early_death() {
+  echo "[FATAL] ${0}: ${1}" >&2;
+  exit 1;
+};
+
+if [ -z "${ISTIOCTLENV_ROOT:-""}" ]; then
+  # http://stackoverflow.com/questions/1055671/how-can-i-get-the-behavior-of-gnus-readlink-f-on-a-mac
+  readlink_f() {
+    local target_file="${1}";
+    local file_name;
+
+    while [ "${target_file}" != "" ]; do
+      cd "$(dirname ${target_file})" || early_death "Failed to 'cd \$(dirname ${target_file})' while trying to determine ISTIOCTLENV_ROOT";
+      file_name="$(basename "${target_file}")" || early_death "Failed to 'basename \"${target_file}\"' while trying to determine ISTIOCTLENV_ROOT";
+      target_file="$(readlink "${file_name}")";
+    done;
+
+    echo "$(pwd -P)/${file_name}";
+  };
+
+  ISTIOCTLENV_ROOT="$(cd "$(dirname "$(readlink_f "${0}")")/.." && pwd)";
+  [ -n "${ISTIOCTLENV_ROOT}" ] || early_death "Failed to 'cd \"\$(dirname \"\$(readlink_f \"${0}\")\")/..\" && pwd' while trying to determine ISTIOCTLENV_ROOT";
+else
+  ISTIOCTLENV_ROOT="${ISTIOCTLENV_ROOT%/}";
+fi;
+export ISTIOCTLENV_ROOT;
+
+if [ -n "${ISTIOCTLENV_HELPERS:-""}" ]; then
+  log 'debug' 'ISTIOCTLENV_HELPERS is set, not sourcing helpers again';
+else
+  [ "${ISTIOCTLENV_DEBUG:-0}" -gt 0 ] && echo "[DEBUG] Sourcing helpers from ${ISTIOCTLENV_ROOT}/lib/helpers.sh";
+  if source "${ISTIOCTLENV_ROOT}/lib/helpers.sh"; then
+    log 'debug' 'Helpers sourced successfully';
+  else
+    early_death "Failed to source helpers from ${ISTIOCTLENV_ROOT}/lib/helpers.sh";
+  fi;
+fi;
+
+# Ensure libexec and bin are in $PATH
+for dir in libexec bin; do
+  case ":${PATH}:" in
+    *:${ISTIOCTLENV_ROOT}/${dir}:*) log 'debug' "\$PATH already contains '${ISTIOCTLENV_ROOT}/${dir}', not adding it again";;
+    *) 
+      log 'debug' "\$PATH does not contain '${ISTIOCTLENV_ROOT}/${dir}', prepending and exporting it now";
+      export PATH="${ISTIOCTLENV_ROOT}/${dir}:${PATH}";
+      ;;
+  esac;
+done;
+
+#####################
+# Begin Script Body #
+#####################
+
+[ "${#}" -ne 0 ] \
+  && log 'error' "usage: istioctlenv list"
+
+[ -d "${ISTIOCTLENV_ROOT}/versions" ] \
+  || log 'error' 'No versions available. Please install one with: istioctlenv install'
+
+[[ -x "${ISTIOCTLENV_ROOT}/versions" && -r "${ISTIOCTLENV_ROOT}/versions" ]] \
+  || log 'error' "istioctlenv versions directory is inaccessible: ${ISTIOCTLENV_ROOT}/versions";
+
+version_name="$(istioctlenv-version-name)" \
+  && log 'debug' "istioctlenv-version-name reported: ${version_name}" \
+  || log 'error' "istioctlenv-version-name failed";
+export version_name;
+
+version_file="$(istioctlenv-version-file)" \
+  && log 'debug' "istioctlenv-version-file reported: ${version_file}" \
+  || log 'error' "istioctlenv-version-file failed";
+export version_file;
+
+print_version () {
+  if [ "${1}" == "${version_name}" ]; then
+    echo "* ${1} (set by ${version_file})";
+  else
+    echo "  ${1}";
+  fi;
+};
+
+log 'debug' 'Listing versions...';
+local_versions=($(\find "${ISTIOCTLENV_ROOT}/versions" -maxdepth 1 -type d -exec basename {} \; \
+  | tail -n +2 \
+  | sort -t'.' -k 1nr,1 -k 2nr,2 -k 3nr,3));
+
+log 'debug' "Local versions: ${local_versions[@]}";
+
+log 'debug' 'Printing versions...';
+for local_version in ${local_versions[@]}; do
+  print_version "${local_version}";
+done;
