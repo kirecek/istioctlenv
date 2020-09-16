@@ -32,4 +32,4 @@ If no parameter is passed, the version to use is resolved automatically via .ist
 
 - [istioctlenv itself](https://github.com/kirecek/istioctlenv/blob/master/LICENSE)
 - [tfenv](https://github.com/tfutils/tfenv/blob/master/LICENSE)
-  - tfenv partially uses rbenv's source code
+  - tfistioctlenv uses big part of tfenv's source code
