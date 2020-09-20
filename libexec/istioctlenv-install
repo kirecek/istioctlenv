@@ -91,9 +91,9 @@ fi
 
 LOCAL_ARCH=$(uname -m)
 
-# if [ "${TARGET_ARCH}" ]; then
-#     LOCAL_ARCH=${TARGET_ARCH}
-# fi
+if [ "${TARGET_ARCH:-""}" ]; then
+    LOCAL_ARCH=${TARGET_ARCH}
+fi
 
 case "${LOCAL_ARCH}" in 
   x86_64)
@@ -135,7 +135,7 @@ trap "rm -rf ${download_tmp}" EXIT;
 mkdir -p "${dst_path}" || log 'error' "Failed to make directory ${dst_path}";
 
 with_arch() {
-  printf "\nDownloading %s from %s ...\n" "$NAME" "$ARCH_URL"
+  printf "Downloading %s from %s ...\n" "$NAME" "$ARCH_URL"
   filename="${download_tmp}/istio-${ISTIO_VERSION}-${OSEXT}-${ISTIO_ARCH}.tar.gz"
   curl "${ARCH_URL}" -fsL -o ${filename}
   tar -xzf $filename -C $dst_path --strip-components=1
@@ -143,7 +143,7 @@ with_arch() {
 }
 
 without_arch() {
-  printf "\nDownloading %s from %s ..." "$NAME" "$URL"
+  printf "Downloading %s from %s ..." "$NAME" "$URL"
   filename="${download_tmp}/istio-${ISTIO_VERSION}-${OSEXT}.tar.gz"
   curl "$URL" -fsL -o $filename
   tar -xzf $filename -C $dst_path --strip-components=1
@@ -170,3 +170,19 @@ else
   printf "Please verify the version you are trying to download.\n\n"
   exit
 fi
+
+printf ""
+printf "\nIstio %s Download Complete!\n" "$ISTIO_VERSION"
+printf "\n"
+printf "Istio has been successfully downloaded into your istioctlenv on your system.\n"
+printf "\n"
+printf "Run the following command to activate the new istioctl version:\n"
+printf "\t istioctlenv use %s\n" "$ISTIO_VERSION"
+printf "\n"
+printf "Next Steps:\n"
+printf "See https://istio.io/latest/docs/setup/install/ to add Istio to your Kubernetes cluster.\n"
+printf "\n"
+printf "Begin the Istio pre-installation check by running:\n"
+printf "\t istioctl x precheck \n"
+printf "\n"
+printf "Need more information? Visit https://istio.io/latest/docs/setup/install/ \n"
