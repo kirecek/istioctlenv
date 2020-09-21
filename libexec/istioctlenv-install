@@ -76,7 +76,7 @@ version="$(istioctlenv-list-remote | grep -e "${regex}" | head -n 1)";
 [ -n "${version}" ] || log 'error' "No versions matching '${requested}' found in remote";
 
 dst_path="${ISTIOCTLENV_ROOT}/versions/${version}";
-if [ -f "${dst_path}/istioctl" ]; then
+if [ -f "${dst_path}/bin/istioctl" ]; then
   echo "istioctl v${version} is already installed";
   exit 0;
 fi;
