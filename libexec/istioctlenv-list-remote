@@ -71,4 +71,4 @@ declare remote_versions;
 remote_versions="$(curlw -sSf "${ISTIOCTLENV_REMOTE}")" \
   || log 'error' "Failed to download remote versions from ${ISTIOCTLENV_REMOTE}";
 
-grep -o -E 'releases/[0-9]+\.[0-9]+\.[0-9]+/' <<<"${remote_versions}" | sort --version-sort -r | uniq | awk -F'/' '{ print $2}';
+grep -o -E 'releases/[0-9]+\.[0-9]+\.[0-9]+/' <<<"${remote_versions}" | sort -r | uniq | awk -F'/' '{ print $2}';
