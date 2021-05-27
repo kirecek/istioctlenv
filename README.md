@@ -24,7 +24,7 @@
 
 ### istioctlenv install [version]
 
-Install a specific version of Terraform.
+Install a specific version of Istio.
 
 If no parameter is passed, the version to use is resolved automatically via .istioctl-version files, defaulting to 'latest' if none are found.
 
